@@ -33,15 +33,21 @@ namespace Ilisan_Alex_Lab2.Controllers
                 return NotFound();
             }
 
+            // Încarcă autorul și cărțile sale asociate
             var author = await _context.Author
+                .Include(a => a.Books)  // Include cărțile asociate autorului
+                .AsNoTracking()
                 .FirstOrDefaultAsync(m => m.ID == id);
+
             if (author == null)
             {
                 return NotFound();
             }
 
+            // Transmite autorul și cărțile asociate în View
             return View(author);
         }
+
 
         // GET: Authors/Create
         public IActionResult Create()

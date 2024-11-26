@@ -1,29 +1,42 @@
 ﻿@model Ilisan_Alex_Lab2.Models.Author
 
 @{
-    ViewData["Title"] = "Details";
+    ViewData["Title"] = "Author Details";
 }
 
-<h1>Details</h1>
+<h1>@Model.FullName</h1>
+<p><strong>First Name:</strong> @Model.FirstName</p>
+<p><strong>Last Name:</strong> @Model.LastName</p>
 
-<div>
-    <h4>Author</h4>
-    <hr />
-    <dl class="row">
-        <dt class = "col-sm-2">
-            @Html.DisplayNameFor(model => model.FirstName)
-        </dt>
-        <dd class = "col-sm-10">
-            @Html.DisplayFor(model => model.FirstName)
-        </dd>
-        <dt class = "col-sm-2">
-            @Html.DisplayNameFor(model => model.LastName)
-        </dt>
-        <dd class = "col-sm-10">
-            @Html.DisplayFor(model => model.LastName)
-        </dd>
-    </dl>
-</div>
+<h2>Books by @Model.FullName</h2>
+
+@if (Model.Books != null && Model.Books.Any())
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Price</th>
+                <th>Genre</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var book in Model.Books)
+            {
+                <tr>
+                    <td>@book.Title</td>
+                    <td>@book.Price</td>
+                    <td>@book.Genre</td> <!-- Dacă ai câmpul Genre în modelul Book -->
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+else
+{
+    <p>This author has no books yet.</p>
+}
+
 <div>
     <a asp-action="Edit" asp-route-id="@Model?.ID">Edit</a> |
     <a asp-action="Index">Back to List</a>
