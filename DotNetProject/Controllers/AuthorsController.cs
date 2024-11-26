@@ -33,9 +33,10 @@ namespace Ilisan_Alex_Lab2.Controllers
                 return NotFound();
             }
 
-            // Încarcă autorul și cărțile sale asociate
+            // Încarcă autorul și cărțile sale asociate, inclusiv genul
             var author = await _context.Author
-                .Include(a => a.Books)  // Include cărțile asociate autorului
+                .Include(a => a.Books)  // Include cărțile autorului
+                .ThenInclude(b => b.Genre)  // Include genul pentru fiecare carte
                 .AsNoTracking()
                 .FirstOrDefaultAsync(m => m.ID == id);
 
@@ -44,9 +45,10 @@ namespace Ilisan_Alex_Lab2.Controllers
                 return NotFound();
             }
 
-            // Transmite autorul și cărțile asociate în View
+            // Transmite autorul și cărțile sale în View
             return View(author);
         }
+
 
 
         // GET: Authors/Create
