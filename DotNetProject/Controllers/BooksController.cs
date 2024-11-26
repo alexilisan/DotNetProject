@@ -20,10 +20,46 @@ namespace Ilisan_Alex_Lab2.Controllers
         }
 
         // GET: Books
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(string sortOrder, string searchString)
         {
-            var libraryContext = _context.Book.Include(b => b.Author).Include(b => b.Genre);
-            return View(await libraryContext.ToListAsync());
+            ViewData["TitleSortParm"] = String.IsNullOrEmpty(sortOrder) ? "title_desc" : "";
+            ViewData["PriceSortParm"] = sortOrder == "Price" ? "price_desc" : "Price";
+            ViewData["CurrentFilter"] = searchString;
+
+            var books = from b in _context.Book
+                        join a in _context.Author on b.AuthorID equals a.ID
+                        join g in _context.Genre on b.GenreID equals g.ID
+                        select new BookViewModel
+                        {
+                            ID = b.ID,
+                            Title = b.Title,
+                            Price = b.Price,
+                            FullName = a.FirstName + " " + a.LastName,
+                            Genre = g.Name
+                        };
+
+            if (!String.IsNullOrEmpty(searchString))
+            {
+                books = books.Where(s => s.Title.Contains(searchString));
+            }
+
+            switch (sortOrder)
+            {
+                case "title_desc":
+                    books = books.OrderByDescending(b => b.Title);
+                    break;
+                case "Price":
+                    books = books.OrderBy(b => b.Price);
+                    break;
+                case "price_desc":
+                    books = books.OrderByDescending(b => b.Price);
+                    break;
+                default:
+                    books = books.OrderBy(b => b.Title);
+                    break;
+            }
+
+            return View(await books.AsNoTracking().ToListAsync());
         }
 
         // GET: Books/Details/5
@@ -34,9 +70,9 @@ namespace Ilisan_Alex_Lab2.Controllers
                 return NotFound();
             }
 
-            var book = await _context.Book
-                .Include(b => b.Author)
-                .Include(b => b.Genre)
+            var book = await _context.Book.Include(s => s.Orders)
+                .ThenInclude(e => e.Customer)
+                .AsNoTracking()
                 .FirstOrDefaultAsync(m => m.ID == id);
             if (book == null)
             {
@@ -55,30 +91,31 @@ namespace Ilisan_Alex_Lab2.Controllers
                             ID = a.ID,
                             FullName = a.FirstName + " " + a.LastName
                         }), "ID", "FullName");
+
             ViewData["GenreID"] = new SelectList(_context.Genre, "ID", "Name");
             return View();
         }
 
         // POST: Books/Create
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("ID,Title,AuthorID,Price,GenreID")] Book book)
+        public async Task<IActionResult> Create([Bind("Title,Price,AuthorID,GenreID")] Book book)
         {
-            if (ModelState.IsValid)
+            try
             {
-                _context.Add(book);
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
+                if (ModelState.IsValid)
+                {
+                    _context.Add(book);
+                    await _context.SaveChangesAsync();
+                    return RedirectToAction(nameof(Index));
+                }
             }
-            ViewData["AuthorID"] = new SelectList(_context.Author
-                        .Select(a => new
-                        {
-                            ID = a.ID,
-                            FullName = a.FirstName + " " + a.LastName
-                        }), "ID", "FullName");
-            ViewData["GenreID"] = new SelectList(_context.Genre, "ID", "Name");
+            catch (DbUpdateException ex)
+            {
+                // Log error
+                // _logger.LogError($"Database update failed: {ex.Message}");
+                ModelState.AddModelError("", "Unable to save changes. Try again, and if the problem persists.");
+            }
             return View(book);
         }
 
@@ -95,60 +132,59 @@ namespace Ilisan_Alex_Lab2.Controllers
             {
                 return NotFound();
             }
+
             ViewData["AuthorID"] = new SelectList(_context.Author
                         .Select(a => new
                         {
                             ID = a.ID,
                             FullName = a.FirstName + " " + a.LastName
-                        }), "ID", "FullName");
-            ViewData["GenreID"] = new SelectList(_context.Genre, "ID", "Name");
+                        }), "ID", "FullName", book.AuthorID);
+
+            ViewData["GenreID"] = new SelectList(_context.Genre, "ID", "Name", book.GenreID);
             return View(book);
         }
 
         // POST: Books/Edit/5
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
-        [HttpPost]
+        [HttpPost, ActionName("Edit")]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("ID,Title,AuthorID,Price,GenreID")] Book book)
+        public async Task<IActionResult> EditPost(int? id)
         {
-            if (id != book.ID)
+            if (id == null)
             {
                 return NotFound();
             }
 
-            if (ModelState.IsValid)
+            var bookToUpdate = await _context.Book.FirstOrDefaultAsync(s => s.ID == id);
+            if (bookToUpdate == null)
+            {
+                return NotFound();
+            }
+
+            if (await TryUpdateModelAsync<Book>(
+                bookToUpdate,
+                "",
+                s => s.AuthorID, s => s.Title, s => s.Price, s => s.GenreID))
             {
                 try
                 {
-                    _context.Update(book);
                     await _context.SaveChangesAsync();
+                    return RedirectToAction(nameof(Index));
                 }
-                catch (DbUpdateConcurrencyException)
+                catch (DbUpdateException ex)
                 {
-                    if (!BookExists(book.ID))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
+                    // Log error
+                    // _logger.LogError($"Database update failed: {ex.Message}");
+                    ModelState.AddModelError("", "Unable to save changes. Try again, and if the problem persists.");
                 }
-                return RedirectToAction(nameof(Index));
             }
-            ViewData["AuthorID"] = new SelectList(_context.Author
-                        .Select(a => new
-                        {
-                            ID = a.ID,
-                            FullName = a.FirstName + " " + a.LastName
-                        }), "ID", "FullName");
-            ViewData["GenreID"] = new SelectList(_context.Genre, "ID", "Name");
-            return View(book);
+
+            ViewData["AuthorID"] = new SelectList(_context.Author, "ID", "FullName", bookToUpdate.AuthorID);
+            ViewData["GenreID"] = new SelectList(_context.Genre, "ID", "Name", bookToUpdate.GenreID);
+            return View(bookToUpdate);
         }
 
         // GET: Books/Delete/5
-        public async Task<IActionResult> Delete(int? id)
+        public async Task<IActionResult> Delete(int? id, bool? saveChangesError = false)
         {
             if (id == null)
             {
@@ -157,11 +193,17 @@ namespace Ilisan_Alex_Lab2.Controllers
 
             var book = await _context.Book
                 .Include(b => b.Author)
-                .Include(b => b.Genre)
+                .AsNoTracking()
                 .FirstOrDefaultAsync(m => m.ID == id);
+
             if (book == null)
             {
                 return NotFound();
+            }
+
+            if (saveChangesError.GetValueOrDefault())
+            {
+                ViewData["ErrorMessage"] = "Delete failed. Try again";
             }
 
             return View(book);
@@ -173,18 +215,23 @@ namespace Ilisan_Alex_Lab2.Controllers
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
             var book = await _context.Book.FindAsync(id);
-            if (book != null)
+            if (book == null)
             {
-                _context.Book.Remove(book);
+                return RedirectToAction(nameof(Index));
             }
 
-            await _context.SaveChangesAsync();
-            return RedirectToAction(nameof(Index));
-        }
-
-        private bool BookExists(int id)
-        {
-            return _context.Book.Any(e => e.ID == id);
+            try
+            {
+                _context.Book.Remove(book);
+                await _context.SaveChangesAsync();
+                return RedirectToAction(nameof(Index));
+            }
+            catch (DbUpdateException ex)
+            {
+                // Log error
+                // _logger.LogError($"Database update failed: {ex.Message}");
+                return RedirectToAction(nameof(Delete), new { id = id, saveChangesError = true });
+            }
         }
     }
 }
